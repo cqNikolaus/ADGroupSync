@@ -1,0 +1,90 @@
+# Bytecode-Dateien
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.ENV/
+
+# Distribution/Build-Verzeichnisse
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer-Dateien
+*.exe
+*.msi
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.wheel
+
+# Log-Dateien
+*.log
+*.txt
+*.out
+
+# Unit-Test- und Coverage-Dateien
+htmlcov/
+.coverage
+.coverage.*
+.cache
+.nox/
+pytest_cache/
+.tox/
+*.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# PyCharm/JetBrains
+.idea/
+*.iml
+*.iws
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionaries/
+.idea/libraries/
+.idea/modules.xml
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb~
+
+# SQL-Datenbank
+*.sqlite3
+
+# Editor-spezifisch
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Betriebssystem/Editor-spezifisch
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*.kate-swp
+*.directory
+
+# Git-spezifisch
+.git/
+.gitignore
+*.orig
+*.patch
+
+# Anaconda
+.conda/
+*.conda
+*.ipynb_checkpoints/
+.envs/
