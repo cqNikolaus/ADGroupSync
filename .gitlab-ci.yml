@@ -32,6 +32,7 @@ build-image:
 run-sync:
   stage: run
   script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - echo "Führe ADGroupSync im Docker-Container aus..."
     - >
       docker run --rm
@@ -46,5 +47,5 @@ run-sync:
   only:
     - main
     - schedules
-    
+
   when: on_success
