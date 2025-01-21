@@ -199,6 +199,7 @@ class ADGroupSync:
                 f"{exc.error_message}"
             )
 
+
     def sync(self):
         logger.info("Starte Synchronisation ...")
 
@@ -225,20 +226,46 @@ class ADGroupSync:
 
         # 4) Identifizieren, welche Azure-User bereits in GitLab sind
         top_level_azure_map = self.get_top_level_azure_map()
-        azure_user_gitlab_ids = {
-            top_level_azure_map[u["id"].lower()]
-            for u in azure_members
-            if u["id"].lower() in top_level_azure_map
-        }
+
+        # Liste der Benutzer, die nicht in GitLab gefunden wurden
+        missing_in_gitlab = []
+        # Liste der Benutzer, die in GitLab existieren
+        existing_in_gitlab = []
+
+        for azure_user in azure_members:
+            azure_oid = azure_user["id"].lower()
+            if azure_oid in top_level_azure_map:
+                existing_in_gitlab.append(azure_user)
+            else:
+                missing_in_gitlab.append(azure_user)
+
+        # Log users not found in GitLab
+        if missing_in_gitlab:
+            logger.warning(
+                "Folgende Benutzer aus der Azure-Gruppe wurden in der GitLab Top-Level-Gruppe nicht gefunden:"
+            )
+            for user in missing_in_gitlab:
+                logger.warning(
+                    f"- {user['displayName']} (Mail: {user['mail']}, OID: {user['id']})"
+                )
+            logger.info(
+                "Diese Benutzer werden entweder im nächsten SCIM-Provisionierungszyklus erstellt "
+                "oder existieren bereits, aber wurden manuell in angelegt."
+            )
 
         # 5) Berechne, welche User hinzugefügt werden müssen
+        azure_user_gitlab_ids = {
+            top_level_azure_map[u["id"].lower()]
+            for u in existing_in_gitlab
+        }
         users_to_add = azure_user_gitlab_ids - gitlab_direct_user_ids
         to_add_count = len(users_to_add)
 
         direct_members_from_azure = len(gitlab_direct_user_ids.intersection(azure_user_gitlab_ids))
+
         logger.info(
-            f"Von den {azure_count} Azure-Mitgliedern sind bereits {direct_members_from_azure} "
-            f"direkte Mitglieder der GitLab-Subgruppe."
+            f"Von den {len(existing_in_gitlab)} in GitLab gefundenen Azure-Mitgliedern sind bereits "
+            f"{direct_members_from_azure} direkte Mitglieder der GitLab-Subgruppe."
             + (
                 f" Versuche {to_add_count} fehlende Mitglieder der GitLab-Subgruppe hinzuzufügen." if to_add_count > 0 else "")
         )
@@ -246,24 +273,31 @@ class ADGroupSync:
         # 6) Fehlende in GitLab hinzufügen
         if to_add_count > 0:
             sub_group = self.gl.groups.get(self.gitlab_group_id)
-            for azure_user in azure_members:
+            for azure_user in existing_in_gitlab:
                 azure_oid = azure_user["id"].lower()
-                if azure_oid in top_level_azure_map:
-                    gitlab_user_id = top_level_azure_map[azure_oid]
-                    if gitlab_user_id in users_to_add:
-                        self._add_user_to_gitlab_group(sub_group, gitlab_user_id, azure_user)
-                else:
-                    # Logge, wenn Benutzer nicht in der Top-Level-Gruppe gefunden wurde
-                    logger.warning(
-                        f"Benutzer '{azure_user['displayName']}' (OID: {azure_oid}) ist nicht in der Top-Level-Gruppe vorhanden. "
-                        "Wahrscheinlich wird dieser Benutzer im nächsten SCIM-Provisionierungszyklus erstellt und beim nächsten Lauf hinzugefügt."
-                    )
+                gitlab_user_id = top_level_azure_map[azure_oid]
+                if gitlab_user_id in users_to_add:
+                    self._add_user_to_gitlab_group(sub_group, gitlab_user_id, azure_user)
 
             logger.info(f"{self.added_count} Benutzer wurden erfolgreich der Subgruppe hinzugefügt.")
         else:
             logger.info("Keine neuen Mitglieder hinzugefügt. Sub-Gruppe ist bereits synchron.")
 
+        # Zusammenfassung
+        if missing_in_gitlab:
+            logger.info(
+                f"Zusammenfassung: {self.added_count} Benutzer hinzugefügt, "
+                f"{len(missing_in_gitlab)} Benutzer konnten nicht synchronisiert werden "
+                f"(siehe Warnungen oben)."
+            )
+        else:
+            logger.info(
+                f"Zusammenfassung: {self.added_count} Benutzer hinzugefügt, "
+                f"alle Azure-Benutzer wurden in GitLab gefunden."
+            )
+
         logger.info("Synchronisation abgeschlossen.")
+
 
 
 def main():
