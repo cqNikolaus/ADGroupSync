@@ -103,6 +103,12 @@ class ADGroupSync:
         user_ids = set()
         while url:
             resp = requests.get(url, headers=headers)
+            
+            if resp.status_code == 401 or resp.status_code == 403:
+                logger.error("Der GitLab-Zugriff wurde verweigert. "
+                             "Möglicherweise ist das GitLab Personal Access Token abgelaufen.")
+                raise Exception("GitLab Personal Access Token könnte abgelaufen sein.")
+
             if resp.status_code != 200:
                 raise Exception(
                     f"Fehler beim Abruf der GitLab-Gruppe: "
