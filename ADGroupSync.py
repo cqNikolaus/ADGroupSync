@@ -4,7 +4,6 @@ import requests
 import gitlab
 from msal import ConfidentialClientApplication
 
-# Logging konfigurieren
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -35,16 +34,14 @@ class ADGroupSync:
         self.top_level_group_id = top_level_group_id
         self.guest_access_level = guest_access_level
 
-        # Microsoft Graph Konfiguration
         self.authority = f"https://login.microsoftonline.com/{self.tenant_id}"
+
         self.scope = ["https://graph.microsoft.com/.default"]
 
-        # GitLab Konfiguration
         self.gl = gitlab.Gitlab(url=self.gitlab_url, private_token=self.gitlab_token)
         self.added_count = 0
 
     def get_azure_token(self) -> str:
-        """Holt ein Access Token für die Microsoft Graph API via MSAL."""
         app = ConfidentialClientApplication(
             client_id=self.client_id,
             client_credential=self.client_secret,
@@ -60,10 +57,6 @@ class ADGroupSync:
             raise Exception("Could not obtain Azure access token.")
 
     def get_azure_group_members(self, token: str) -> list:
-        """
-        Ruft alle Mitglieder der angegebenen Azure-Gruppe ab.
-        Gibt eine Liste von Dictionaries zurück: {"id", "displayName", "mail"}.
-        """
         url = (
             f"https://graph.microsoft.com/v1.0/groups/"
             f"{self.azure_group_id}/members"
@@ -98,15 +91,11 @@ class ADGroupSync:
                         "mail": primary_mail,
                     }
                 )
-            # Paginierung
             url = data.get("@odata.nextLink")
 
         return members
 
     def get_gitlab_direct_members(self) -> set[int]:
-        """
-        Holt nur die direkten Mitglieder der GitLab-Subgruppe (ohne vererbte Mitglieder).
-        """
         headers = {"Private-Token": self.gitlab_token}
         group_id = self.gitlab_group_id
         url = f"{self.gitlab_url}/api/v4/groups/{group_id}/members?per_page=100"
@@ -123,7 +112,6 @@ class ADGroupSync:
             for member in data:
                 user_ids.add(member['id'])
 
-            # Check for pagination
             if 'next' in resp.links:
                 url = resp.links['next']['url']
             else:
@@ -151,7 +139,6 @@ class ADGroupSync:
             for member in data:
                 user_ids.add(member['id'])
 
-            # Check for pagination
             if 'next' in resp.links:
                 url = resp.links['next']['url']
             else:
@@ -161,9 +148,9 @@ class ADGroupSync:
 
     def get_top_level_azure_map(self) -> dict[str, int]:
         """
-        Lädt die Mitglieder der Top-Level-Gruppe (falls konfiguriert) und baut
-        eine Zuordnung AzureOID.lower() -> GitLab-User-ID.
-        So erkennen wir anhand der Azure OID, welche GitLab-User-ID dahintersteckt.
+        Holt alle in GitLab existierenden Mitglieder der Azure Gruppe und gibt
+        eine Zuordnung zwischen Azure ObjectID und GitLab UserID zurück:
+        dict: {"AzureOID": GitLab-UserID}.
         """
         if not self.top_level_group_id:
             return {}
@@ -182,7 +169,6 @@ class ADGroupSync:
         return azure_map
 
     def _add_user_to_gitlab_group(self, group, user_id: int, azure_user: dict):
-        """Fügt einen (bereits vorhandenen GitLab-)User der Subgruppe hinzu (z.B. als Gast)."""
         try:
             group.members.create({
                 "user_id": user_id,
@@ -203,15 +189,15 @@ class ADGroupSync:
     def sync(self):
         logger.info("Starte Synchronisation ...")
 
-        # 1) Azure-Token
+        # Azure-Token
         azure_token = self.get_azure_token()
 
-        # 2) Azure-Gruppe: Mitglieder
+        # Azure-Gruppe: Mitglieder
         azure_members = self.get_azure_group_members(token=azure_token)
         azure_count = len(azure_members)
         logger.info(f"[Azure] Gruppe: {azure_count} Mitglieder gefunden.")
 
-        # 3) GitLab-Subgruppe: Mitglieder (direkt und vererbt)
+        # GitLab-Subgruppe: Mitglieder
         gitlab_direct_user_ids = self.get_gitlab_direct_members()
         gitlab_all_user_ids = self.get_gitlab_all_members()
         gitlab_direct_count = len(gitlab_direct_user_ids)
@@ -224,12 +210,10 @@ class ADGroupSync:
             f"{gitlab_inherited_count} vererbte."
         )
 
-        # 4) Identifizieren, welche Azure-User bereits in GitLab sind
+        # Identifizieren, welche Azure-User bereits in GitLab sind
         top_level_azure_map = self.get_top_level_azure_map()
 
-        # Liste der Benutzer, die nicht in GitLab gefunden wurden
         missing_in_gitlab = []
-        # Liste der Benutzer, die in GitLab existieren
         existing_in_gitlab = []
 
         for azure_user in azure_members:
@@ -239,7 +223,7 @@ class ADGroupSync:
             else:
                 missing_in_gitlab.append(azure_user)
 
-        # Log users not found in GitLab
+
         if missing_in_gitlab:
             logger.warning(
                 "Folgende Benutzer aus der Azure-Gruppe scheinen in GitLab noch nicht zu existieren:"
@@ -253,7 +237,7 @@ class ADGroupSync:
                 "oder existieren bereits, aber wurden nicht per SCIM erstellt."
             )
 
-        # 5) Berechne, welche User hinzugefügt werden müssen
+        # Berechne, welche User hinzugefügt werden müssen
         azure_user_gitlab_ids = {
             top_level_azure_map[u["id"].lower()]
             for u in existing_in_gitlab
@@ -270,7 +254,7 @@ class ADGroupSync:
                 f" Versuche {to_add_count} fehlende Mitglieder der GitLab-Subgruppe hinzuzufügen." if to_add_count > 0 else "")
         )
 
-        # 6) Fehlende in GitLab hinzufügen
+        # Fehlende Mitglieder zu GitLab Subgruppe hinzufügen
         if to_add_count > 0:
             sub_group = self.gl.groups.get(self.gitlab_group_id)
             for azure_user in existing_in_gitlab:
@@ -296,16 +280,16 @@ class ADGroupSync:
 
 
 def main():
-    tenant_id = os.getenv("AZURE_TENANT_ID", "<your-tenant-id>")
-    client_id = os.getenv("AZURE_CLIENT_ID", "<your-client-id>")
-    client_secret = os.getenv("AZURE_CLIENT_SECRET", "<your-client-secret>")
-    azure_group_id = os.getenv("AZURE_GROUP_ID", "<azure-group-id>")
+    tenant_id = os.getenv("AZURE_TENANT_ID")
+    client_id = os.getenv("AZURE_CLIENT_ID")
+    client_secret = os.getenv("AZURE_CLIENT_SECRET")
+    azure_group_id = os.getenv("AZURE_GROUP_ID")
 
     gitlab_url = os.getenv("GITLAB_URL", "https://gitlab.com")
-    gitlab_token = os.getenv("GITLAB_TOKEN", "<your-gitlab-personal-access-token>")
+    gitlab_token = os.getenv("GITLAB_TOKEN")
 
-    gitlab_group_id = os.getenv("GITLAB_GROUP_ID", "12345678")
-    top_level_group_id = os.getenv("TOP_LEVEL_GROUP_ID", "87654321")
+    gitlab_group_id = os.getenv("GITLAB_GROUP_ID")
+    top_level_group_id = os.getenv("TOP_LEVEL_GROUP_ID")
 
     syncer = ADGroupSync(
         tenant_id=tenant_id,
