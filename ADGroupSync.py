@@ -218,7 +218,7 @@ class ADGroupSync:
         gitlab_total_count = len(gitlab_all_user_ids)
         gitlab_inherited_count = gitlab_total_count - gitlab_direct_count
 
-        logger.info(
+        logger.debug(
             f"[GitLab] Sub-Gruppe: insgesamt {gitlab_total_count} Mitglieder, "
             f"davon {gitlab_direct_count} direkte Mitglieder und "
             f"{gitlab_inherited_count} vererbte."
@@ -242,7 +242,7 @@ class ADGroupSync:
         # Log users not found in GitLab
         if missing_in_gitlab:
             logger.warning(
-                "Folgende Benutzer aus der Azure-Gruppe wurden in der GitLab Top-Level-Gruppe nicht gefunden:"
+                "Folgende Benutzer aus der Azure-Gruppe scheinen in GitLab noch nicht zu existieren:"
             )
             for user in missing_in_gitlab:
                 logger.warning(
@@ -250,7 +250,7 @@ class ADGroupSync:
                 )
             logger.info(
                 "Diese Benutzer werden entweder im nächsten SCIM-Provisionierungszyklus erstellt "
-                "oder existieren bereits, aber wurden manuell in angelegt."
+                "oder existieren bereits, aber wurden nicht per SCIM erstellt."
             )
 
         # 5) Berechne, welche User hinzugefügt werden müssen
