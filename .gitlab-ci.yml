@@ -1,0 +1,48 @@
+image: docker:20.10.16
+
+services:
+  - docker:20.10.16-dind
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+
+stages:
+  - build
+  - run
+
+build-image:
+  stage: build
+  script:
+    - echo "Melde mich bei der GitLab Container Registry an..."
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+
+    - echo "Baue Docker-Image..."
+    - docker build --pull -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+
+    - echo "Push Docker-Image mit Commit-SHA Tag..."
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+
+    - echo "Setze zusätzlich den Tag 'latest' und pushe..."
+    - docker tag "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" "$CI_REGISTRY_IMAGE:latest"
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+  only:
+    - main
+
+run-sync:
+  stage: run
+  script:
+    - echo "Führe ADGroupSync im Docker-Container aus..."
+    - docker run --rm \
+        -e GITLAB_GROUP_ID="$GITLAB_GROUP_ID" \
+        -e AZURE_GROUP_ID="$AZURE_GROUP_ID" \
+        -e AZURE_TENANT_ID="$AZURE_TENANT_ID" \
+        -e AZURE_CLIENT_ID="$AZURE_CLIENT_ID" \
+        -e AZURE_CLIENT_SECRET="$AZURE_CLIENT_SECRET" \
+        -e GITLAB_URL="$GITLAB_URL" \
+        -e GITLAB_TOKEN="$GITLAB_TOKEN" \
+        "$CI_REGISTRY_IMAGE:latest"
+  only:
+    - main
+    - schedules
+  when: on_success
