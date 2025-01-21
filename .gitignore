@@ -27,7 +27,6 @@ dist/
 
 # Log-Dateien
 *.log
-*.txt
 *.out
 
 # Unit-Test- und Coverage-Dateien
