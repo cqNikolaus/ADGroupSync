@@ -290,11 +290,6 @@ class ADGroupSync:
                 f"{len(missing_in_gitlab)} Benutzer konnten nicht synchronisiert werden "
                 f"(siehe Warnungen oben)."
             )
-        else:
-            logger.info(
-                f"Zusammenfassung: {self.added_count} Benutzer hinzugefügt, "
-                f"alle Azure-Benutzer wurden in GitLab gefunden."
-            )
 
         logger.info("Synchronisation abgeschlossen.")
 
